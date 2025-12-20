@@ -1,7 +1,6 @@
-import { createReadStream, existsSync } from 'fs'
 import db from '../../../utils/db.js'
 import { verifyToken, extractToken } from '../../../utils/jwt.js'
-import { getImagePath } from '../../../utils/upload.js'
+import { getFileFromS3 } from '../../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -67,11 +66,12 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // 检查文件是否存在
-    const filePath = getImagePath(image.filename)
-
-    if (!existsSync(filePath)) {
-      console.log('[Admin Preview] File does not exist:', filePath)
+    // 从S3获取文件内容
+    let imageBuffer
+    try {
+      imageBuffer = await getFileFromS3(image.filename)
+    } catch (error) {
+      console.log('[Admin Preview] File does not exist in S3:', image.filename)
       throw createError({
         statusCode: 404,
         message: '图片文件不存在'
@@ -96,12 +96,12 @@ export default defineEventHandler(async (event) => {
 
     // 设置响应头（不缓存，因为是管理员预览）
     setHeader(event, 'Content-Type', contentType)
-    setHeader(event, 'Content-Length', image.size)
+    setHeader(event, 'Content-Length', imageBuffer.length)
     setHeader(event, 'Cache-Control', 'no-store, no-cache, must-revalidate')
     setHeader(event, 'X-Content-Type-Options', 'nosniff')
 
-    // 返回文件流
-    return sendStream(event, createReadStream(filePath))
+    // 返回图片数据
+    return imageBuffer
   } catch (error) {
     if (error.statusCode) {
       throw error

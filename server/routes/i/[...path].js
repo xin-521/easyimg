@@ -1,7 +1,5 @@
-import { createReadStream, existsSync } from 'fs'
 import { createHash } from 'crypto'
 import db from '../../utils/db.js'
-import { getImagePath } from '../../utils/upload.js'
 import { getFileFromS3 } from '../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {

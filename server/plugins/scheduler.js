@@ -1,8 +1,6 @@
 import db from '../utils/db.js'
-import { unlink } from 'fs/promises'
-import { existsSync } from 'fs'
 import { startProcessor as startModerationProcessor, retryFailedTasks } from '../utils/moderationQueue.js'
-import { getUploadsDirPath, getImagePath } from '../utils/upload.js'
+import { deleteImage } from '../utils/image.js'
 
 // 定时任务间隔（毫秒）
 const RETRY_FAILED_TASKS_INTERVAL = 60 * 60 * 1000  // 1 小时
@@ -19,11 +17,8 @@ export async function hardDeleteImages() {
     let deletedCount = 0
     for (const image of deletedImages) {
       try {
-        // 删除物理文件
-        const filePath = getImagePath(image.filename)
-        if (existsSync(filePath)) {
-          await unlink(filePath)
-        }
+        // 删除S3中的文件
+        await deleteImage(image.filename)
 
         // 从数据库中彻底删除记录
         await db.images.remove({ _id: image._id })

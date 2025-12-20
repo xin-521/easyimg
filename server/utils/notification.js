@@ -9,6 +9,7 @@ import db from './db.js'
 import TelegramBot from 'node-telegram-bot-api'
 import nodemailer from 'nodemailer'
 import { getImagePath } from './upload.js'
+import { getFileFromS3 } from './s3.js'
 
 // 通知类型枚举
 export const NOTIFICATION_TYPES = {
@@ -222,23 +223,17 @@ function isValidImageUrl(url) {
 }
 
 /**
- * 从本地文件系统读取图片
+ * 从存储系统读取图片（S3或本地）
  * @param {string} filename - 图片文件名
  * @returns {Promise<Buffer|null>} 图片Buffer，失败返回null
  */
 async function readLocalImage(filename) {
   try {
-    const filepath = getImagePath(filename)
-
-    if (!existsSync(filepath)) {
-      console.warn(`[Notification] 本地图片文件不存在: ${filepath}`)
-      return null
-    }
-
-    const buffer = await readFile(filepath)
+    // 尝试从S3获取图片
+    const buffer = await getFileFromS3(filename)
     return buffer
   } catch (error) {
-    console.warn('[Notification] 读取本地图片出错:', error.message)
+    console.warn('[Notification] 从S3读取图片失败:', error.message)
     return null
   }
 }
