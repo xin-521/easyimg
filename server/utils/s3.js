@@ -104,8 +104,14 @@ export async function uploadFileToS3(buffer, key, contentType) {
     // 如果没有配置自定义域名，尝试使用 S3 默认 URL
     const endpoint = s3Config.endpoint
     if (endpoint) {
-      // 对于自定义端点（如 MinIO）
-      return `${endpoint}/${bucketName}/${key}`
+      // 对于自定义端点（如七牛云）
+      if (s3Config.forcePathStyle) {
+        // 七牛云等使用路径样式的服务
+        return `${endpoint}/${bucketName}/${key}`
+      } else {
+        // 其他S3兼容服务
+        return `${endpoint}/${key}`
+      }
     }
     
     // 对于 AWS S3
@@ -195,8 +201,14 @@ export function getPublicUrl(key) {
   // 如果没有配置自定义域名，尝试使用 S3 默认 URL
   const endpoint = s3Config.endpoint
   if (endpoint) {
-    // 对于自定义端点（如 MinIO）
-    return `${endpoint}/${bucketName}/${key}`
+    // 对于自定义端点（如七牛云）
+    if (s3Config.forcePathStyle) {
+      // 七牛云等使用路径样式的服务
+      return `${endpoint}/${bucketName}/${key}`
+    } else {
+      // 其他S3兼容服务
+      return `${endpoint}/${key}`
+    }
   }
   
   // 对于 AWS S3
