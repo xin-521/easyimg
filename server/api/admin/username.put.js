@@ -51,8 +51,18 @@ export default defineEventHandler(async (event) => {
     }
 
     // 更新用户名
+    let userObjectId
+    try {
+      userObjectId = new ObjectId(user.userId)
+    } catch (err) {
+      throw createError({
+        statusCode: 400,
+        message: '无效的用户 ID'
+      })
+    }
+
     await db.users.update(
-      { _id: new ObjectId(user.userId) },
+      { _id: userObjectId },
       {
         $set: {
           username: username.trim(),

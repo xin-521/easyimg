@@ -41,7 +41,17 @@ export default defineEventHandler(async (event) => {
     }
 
     // 获取用户
-    const dbUser = await db.users.findOne({ _id: new ObjectId(user.userId) })
+    let userObjectId
+    try {
+      userObjectId = new ObjectId(user.userId)
+    } catch (err) {
+      throw createError({
+        statusCode: 400,
+        message: '无效的用户 ID'
+      })
+    }
+
+    const dbUser = await db.users.findOne({ _id: userObjectId })
     if (!dbUser) {
       throw createError({
         statusCode: 404,
@@ -63,7 +73,7 @@ export default defineEventHandler(async (event) => {
 
     // 更新密码
     await db.users.update(
-      { _id: new ObjectId(user.userId) },
+      { _id: userObjectId },
       {
         $set: {
           password: hashedPassword,
