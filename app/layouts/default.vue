@@ -96,16 +96,6 @@
               <span class="hidden sm:inline">通知</span>
             </NuxtLink>
 
-            <!-- 关于 -->
-            <NuxtLink
-              to="/about"
-              class="nav-link"
-              :class="{ 'nav-link-active': route.path === '/about' }"
-            >
-              <Icon name="heroicons:information-circle" class="w-5 h-5 sm:hidden" />
-              <span class="hidden sm:inline">关于</span>
-            </NuxtLink>
-
             <!-- 分隔线 -->
             <div class="w-px h-6 bg-gray-200 dark:bg-gray-700 mx-1 sm:mx-2"></div>
 

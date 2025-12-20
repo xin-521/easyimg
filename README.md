@@ -1,6 +1,6 @@
 <div align="center">
 
-# EasyImg
+# EasyImg(Fork url: https://github.com/chaos-zhu/easyimg)
 
 _✨ 简单易用的个人图床系统，基于 Nuxt.js 构建 ✨_
 
