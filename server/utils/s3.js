@@ -87,6 +87,8 @@ testS3Connection().catch(error => {
  */
 export async function uploadFileToS3(buffer, key, contentType) {
   try {
+    console.log('[S3 Debug] 开始上传:', { key, contentType, bufferLength: buffer.length })
+    
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
@@ -94,9 +96,13 @@ export async function uploadFileToS3(buffer, key, contentType) {
       ContentType: contentType
     })
 
-    await s3Client.send(command)
+    const result = await s3Client.send(command)
+    console.log('[S3 Debug] 上传成功:', result)
     
     // 返回文件的公共访问 URL
+    const publicUrl = getPublicUrl(key)
+    console.log('[S3 Debug] 生成的URL:', publicUrl)
+    
     if (baseUrl) {
       return `${baseUrl}/${key}`
     }

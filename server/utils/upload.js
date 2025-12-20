@@ -32,13 +32,21 @@ export async function parseFormData(event) {
   
   if (Buffer.isBuffer(fileField.data)) {
     buffer = fileField.data
+  } else if (fileField.data instanceof ArrayBuffer) {
+    // 使用与 URL 上传相同的方式
+    buffer = Buffer.from(fileField.data)
   } else if (fileField.data instanceof Uint8Array) {
     buffer = Buffer.from(fileField.data)
   } else if (typeof fileField.data === 'string') {
     buffer = Buffer.from(fileField.data, 'binary')
   } else {
-    // 尝试转换为 Buffer
-    buffer = Buffer.from(fileField.data)
+    // 尝试转换为 ArrayBuffer 再转 Buffer
+    try {
+      const arrayBuffer = fileField.data.buffer || fileField.data
+      buffer = Buffer.from(arrayBuffer)
+    } catch (e) {
+      buffer = Buffer.from(fileField.data)
+    }
   }
   
   console.log('[Upload Debug] final buffer length:', buffer.length)
@@ -138,7 +146,9 @@ export async function saveUploadedImage(buffer, options) {
   const contentType = mimeTypes[finalExt] || 'application/octet-stream'
 
   // 上传到 S3
-  await uploadFileToS3(finalBuffer, filename, contentType)
+  console.log('[Upload Debug] 开始上传到S3, filename:', filename, 'contentType:', contentType, 'buffer length:', finalBuffer.length)
+  const s3Result = await uploadFileToS3(finalBuffer, filename, contentType)
+  console.log('[Upload Debug] S3上传结果:', s3Result)
 
   // 保存到数据库
   const imageRecord = {
