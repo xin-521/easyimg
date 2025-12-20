@@ -51,46 +51,8 @@ export default defineEventHandler(async (event) => {
     }
 
     // 更新用户名
-    let userObjectId
-    try {
-      userObjectId = new ObjectId(user.userId)
-    } catch (err) {
-      // 如果转换 ObjectId 失败，尝试使用字符串查询
-      const result = await db.users.update(
-        { _id: user.userId },
-        {
-          $set: {
-            username: username.trim(),
-            updatedAt: new Date().toISOString()
-          }
-        }
-      )
-
-      if (result.matchedCount === 0) {
-        throw createError({
-          statusCode: 404,
-          message: '用户不存在'
-        })
-      }
-
-      // 生成新 Token
-      const newToken = await generateToken({
-        userId: user.userId,
-        username: username.trim()
-      })
-
-      return {
-        success: true,
-        message: '用户名修改成功',
-        data: {
-          token: newToken,
-          username: username.trim()
-        }
-      }
-    }
-
-    await db.users.update(
-      { _id: userObjectId },
+    const result = await db.users.update(
+      { _id: user.userId },
       {
         $set: {
           username: username.trim(),
@@ -98,6 +60,13 @@ export default defineEventHandler(async (event) => {
         }
       }
     )
+
+    if (result.matchedCount === 0) {
+      throw createError({
+        statusCode: 404,
+        message: '用户不存在'
+      })
+    }
 
     // 生成新 Token
     const newToken = await generateToken({

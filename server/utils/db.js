@@ -37,11 +37,15 @@ async function getDB() {
 function processQuery(query) {
   if (query._id) {
     if (typeof query._id === 'string') {
-      try {
-        query._id = new ObjectId(query._id)
-      } catch (e) {
-        // 如果不是有效的 ObjectId，保持原样
+      // 检查是否是有效的 ObjectId 格式 (24位十六进制字符串)
+      if (/^[0-9a-fA-F]{24}$/.test(query._id)) {
+        try {
+          query._id = new ObjectId(query._id)
+        } catch (e) {
+          // 转换失败，保持字符串格式
+        }
       }
+      // 如果不是ObjectId格式，保持字符串格式（用于UUID等）
     }
   }
   return query

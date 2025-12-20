@@ -41,49 +41,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // 获取用户
-    let userObjectId
-    try {
-      userObjectId = new ObjectId(user.userId)
-    } catch (err) {
-      // 如果转换 ObjectId 失败，尝试使用字符串查询
-      const dbUser = await db.users.findOne({ _id: user.userId })
-      if (!dbUser) {
-        throw createError({
-          statusCode: 404,
-          message: '用户不存在'
-        })
-      }
-
-      // 验证旧密码
-      const isValidPassword = await bcrypt.compare(oldPassword, dbUser.password)
-      if (!isValidPassword) {
-        throw createError({
-          statusCode: 400,
-          message: '旧密码错误'
-        })
-      }
-
-      // 加密新密码
-      const hashedPassword = await bcrypt.hash(newPassword, 10)
-
-      // 更新密码
-      await db.users.update(
-        { _id: user.userId },
-        {
-          $set: {
-            password: hashedPassword,
-            updatedAt: new Date().toISOString()
-          }
-        }
-      )
-
-      return {
-        success: true,
-        message: '密码修改成功'
-      }
-    }
-
-    const dbUser = await db.users.findOne({ _id: userObjectId })
+    const dbUser = await db.users.findOne({ _id: user.userId })
     if (!dbUser) {
       throw createError({
         statusCode: 404,
@@ -104,8 +62,8 @@ export default defineEventHandler(async (event) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10)
 
     // 更新密码
-    await db.users.update(
-      { _id: userObjectId },
+    const result = await db.users.update(
+      { _id: user.userId },
       {
         $set: {
           password: hashedPassword,
@@ -113,6 +71,13 @@ export default defineEventHandler(async (event) => {
         }
       }
     )
+
+    if (result.matchedCount === 0) {
+      throw createError({
+        statusCode: 404,
+        message: '用户不存在'
+      })
+    }
 
     return {
       success: true,
