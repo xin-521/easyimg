@@ -1,6 +1,7 @@
 import db from '../../utils/db.js'
 import { processImage, getImageMetadata, saveUploadedFile } from '../../utils/image.js'
 import { parseFormData } from '../../utils/upload.js'
+import { deleteFileFromS3 } from '../../utils/s3.js'
 import { v4 as uuidv4 } from 'uuid'
 import {
   checkPublicRateLimit,
@@ -15,6 +16,7 @@ import { getPublicUrl } from '../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {
   const clientIP = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
+  let concurrencyAcquired = false
 
   try {
     // 检查 IP 是否在黑名单中
@@ -57,16 +59,33 @@ export default defineEventHandler(async (event) => {
       }
       // 获取并发锁
       acquirePublicConcurrency(clientIP)
+      concurrencyAcquired = true
     }
 
     // 解析表单数据
-    const { file } = await parseFormData(event)
+    let parseResult
+    try {
+      parseResult = await parseFormData(event)
+    } catch (error) {
+      throw createError({
+        statusCode: 400,
+        message: error.message || '文件解析失败'
+      })
+    }
 
+    const { file } = parseResult
     if (!file) {
-      releasePublicConcurrency(clientIP)
       throw createError({
         statusCode: 400,
         message: '请选择要上传的图片'
+      })
+    }
+
+    // 验证文件有效性
+    if (!file.buffer || file.buffer.length === 0) {
+      throw createError({
+        statusCode: 400,
+        message: '上传的文件为空'
       })
     }
 
@@ -74,7 +93,6 @@ export default defineEventHandler(async (event) => {
     const fileExt = file.originalFilename?.split('.').pop()?.toLowerCase() || ''
     const allowedFormats = config.allowedFormats || ['jpg', 'jpeg', 'png', 'gif', 'webp']
     if (!allowedFormats.includes(fileExt)) {
-      releasePublicConcurrency(clientIP)
       throw createError({
         statusCode: 400,
         message: `不支持的图片格式，允许的格式: ${allowedFormats.join(', ')}`
@@ -84,7 +102,6 @@ export default defineEventHandler(async (event) => {
     // 检查文件大小
     const maxFileSize = config.maxFileSize || 10 * 1024 * 1024
     if (file.size > maxFileSize) {
-      releasePublicConcurrency(clientIP)
       throw createError({
         statusCode: 400,
         message: `文件大小超过限制 (最大 ${Math.round(maxFileSize / 1024 / 1024)}MB)`
@@ -99,22 +116,44 @@ export default defineEventHandler(async (event) => {
     let finalFormat = fileExt
     let isWebp = false
 
-    if (config.compressToWebp && fileExt !== 'gif') {
-      const quality = config.webpQuality || 80
-      processedBuffer = await processImage(file.buffer, {
-        format: 'webp',
-        quality: quality
-      })
-      finalFormat = 'webp'
-      isWebp = true
+    try {
+      if (config.compressToWebp && fileExt !== 'gif') {
+        const quality = config.webpQuality || 80
+        processedBuffer = await processImage(file.buffer, {
+          format: 'webp',
+          quality: quality
+        })
+        finalFormat = 'webp'
+        isWebp = true
+      }
+    } catch (error) {
+      console.error('[Upload] 图片处理失败:', error)
+      // 图片处理失败时使用原始文件
+      processedBuffer = file.buffer
+      finalFormat = fileExt
+      isWebp = false
     }
 
     // 获取图片元数据
-    const metadata = await getImageMetadata(processedBuffer)
+    let metadata = { width: 0, height: 0 }
+    try {
+      metadata = await getImageMetadata(processedBuffer)
+    } catch (error) {
+      console.error('[Upload] 获取图片元数据失败:', error)
+    }
 
     // 保存文件到 S3
     const filename = `${imageUuid}.${finalFormat}`
-    const imageUrl = await saveUploadedFile(processedBuffer, filename)
+    let imageUrl
+    try {
+      imageUrl = await saveUploadedFile(processedBuffer, filename)
+    } catch (error) {
+      console.error('[Upload] 保存文件失败:', error)
+      throw createError({
+        statusCode: 500,
+        message: '文件保存失败，请稍后重试'
+      })
+    }
 
     // 判断是否启用内容安全检测
     const contentSafetyEnabled = config.contentSafety?.enabled || false
@@ -136,14 +175,29 @@ export default defineEventHandler(async (event) => {
       uploadedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       // 内容审核相关字段
-      // 如果未启用内容安全检测，状态直接设为 skipped
       moderationStatus: contentSafetyEnabled ? 'pending' : 'skipped',
       moderationResult: contentSafetyEnabled ? null : { skipped: true, reason: '内容安全检测未启用' },
-      moderationChecked: !contentSafetyEnabled,  // 未启用时标记为已检测（跳过）
+      moderationChecked: !contentSafetyEnabled,
       isNsfw: false
     }
 
-    const insertResult = await db.images.insert(imageDoc)
+    let insertResult
+    try {
+      insertResult = await db.images.insert(imageDoc)
+    } catch (error) {
+      console.error('[Upload] 数据库保存失败:', error)
+      // 尝试删除已上传的文件
+      try {
+        await deleteFileFromS3(filename)
+      } catch (deleteError) {
+        console.error('[Upload] 清理文件失败:', deleteError)
+      }
+      throw createError({
+        statusCode: 500,
+        message: '数据保存失败，请稍后重试'
+      })
+    }
+    
     const imageId = insertResult._id
 
     // 如果启用了内容安全检测，创建审核任务
@@ -157,7 +211,10 @@ export default defineEventHandler(async (event) => {
     }
 
     // 释放并发锁
-    releasePublicConcurrency(clientIP)
+    if (concurrencyAcquired) {
+      releasePublicConcurrency(clientIP)
+      concurrencyAcquired = false
+    }
 
     // 获取站点 URL 配置，用于生成完整图片链接
     const appSettingsDoc = await db.settings.findOne({ key: 'appSettings' })
@@ -212,7 +269,9 @@ export default defineEventHandler(async (event) => {
     }
   } catch (error) {
     // 确保释放并发锁
-    releasePublicConcurrency(clientIP)
+    if (concurrencyAcquired) {
+      releasePublicConcurrency(clientIP)
+    }
 
     if (error.statusCode) {
       throw error

@@ -440,18 +440,31 @@ async function uploadSingleFile(file) {
     headers['X-API-Key'] = defaultApiKey.value
   }
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: formData
-  })
+  let response
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData
+    })
+  } catch (error) {
+    // 网络错误
+    throw new Error('网络连接失败，请检查网络后重试')
+  }
 
-  const data = await response.json()
+  let data
+  try {
+    data = await response.json()
+  } catch (error) {
+    // JSON解析错误
+    throw new Error('服务器响应格式错误')
+  }
 
   if (response.ok && data.success) {
-    return { success: true, filename: file.name }
+    return { success: true, filename: file.name, data: data.data }
   } else {
-    return { success: false, filename: file.name, error: data.message || '上传失败' }
+    const errorMessage = data.message || data.error?.message || '上传失败'
+    return { success: false, filename: file.name, error: errorMessage }
   }
 }
 
@@ -488,9 +501,10 @@ async function uploadFiles(files) {
   isUploading.value = true
   let successCount = 0
   let failCount = 0
+  const failedFiles = []
 
   try {
-    // 串行上传，每次间隔 300ms 避免给服务器造成压力
+    // 串行上传，每次间隔 100ms 避免给服务器造成压力
     for (let i = 0; i < validFiles.length; i++) {
       const file = validFiles[i]
       uploadProgress.value = `上传中 (${i + 1}/${validFiles.length})...`
@@ -501,11 +515,14 @@ async function uploadFiles(files) {
           successCount++
         } else {
           failCount++
+          failedFiles.push({ name: file.name, error: result.error })
           toastStore.error(`${result.filename}: ${result.error}`)
         }
       } catch (error) {
         failCount++
-        toastStore.error(`${file.name}: 上传失败`)
+        const errorMessage = error.message || '上传失败'
+        failedFiles.push({ name: file.name, error: errorMessage })
+        toastStore.error(`${file.name}: ${errorMessage}`)
       }
 
       // 如果不是最后一个文件，等待 100ms 再上传下一个
@@ -523,6 +540,8 @@ async function uploadFiles(files) {
       }
       // 刷新图片列表
       await imagesStore.fetchImages(true)
+    } else if (failCount > 0) {
+      toastStore.error('所有文件上传失败')
     }
   } catch (error) {
     console.error('上传失败:', error)
@@ -599,17 +618,27 @@ async function handleUrlUpload() {
 
   try {
     // 使用fetch发送POST请求，然后读取SSE响应
-    const response = await fetch('/api/upload/urls', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authStore.authHeader
-      },
-      body: JSON.stringify({ urls })
-    })
+    let response
+    try {
+      response = await fetch('/api/upload/urls', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authStore.authHeader
+        },
+        body: JSON.stringify({ urls })
+      })
+    } catch (error) {
+      throw new Error('网络连接失败，请检查网络后重试')
+    }
 
     if (!response.ok) {
-      const errorData = await response.json()
+      let errorData
+      try {
+        errorData = await response.json()
+      } catch (e) {
+        throw new Error('服务器响应错误')
+      }
       throw new Error(errorData.message || '上传失败')
     }
 
@@ -619,7 +648,14 @@ async function handleUrlUpload() {
     let buffer = ''
 
     while (true) {
-      const { done, value } = await reader.read()
+      let result
+      try {
+        result = await reader.read()
+      } catch (error) {
+        throw new Error('数据流读取失败')
+      }
+      
+      const { done, value } = result
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })

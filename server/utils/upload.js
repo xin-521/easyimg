@@ -10,54 +10,61 @@ import db from './db.js'
  * 解析 multipart/form-data 请求
  */
 export async function parseFormData(event) {
-  const formData = await readMultipartFormData(event)
+  try {
+    const formData = await readMultipartFormData(event)
 
-  if (!formData || formData.length === 0) {
-    return { file: null }
-  }
-
-  // 查找文件字段
-  const fileField = formData.find(field => field.name === 'file' || field.name === 'image')
-
-  if (!fileField || !fileField.data) {
-    return { file: null }
-  }
-
-  // 确保数据是 Buffer 格式
-  let buffer
-  console.log('[Upload Debug] fileField.data type:', typeof fileField.data)
-  console.log('[Upload Debug] fileField.data constructor:', fileField.data.constructor.name)
-  console.log('[Upload Debug] isBuffer:', Buffer.isBuffer(fileField.data))
-  console.log('[Upload Debug] data length:', fileField.data.length)
-  
-  if (Buffer.isBuffer(fileField.data)) {
-    buffer = fileField.data
-  } else if (fileField.data instanceof ArrayBuffer) {
-    // 使用与 URL 上传相同的方式
-    buffer = Buffer.from(fileField.data)
-  } else if (fileField.data instanceof Uint8Array) {
-    buffer = Buffer.from(fileField.data)
-  } else if (typeof fileField.data === 'string') {
-    buffer = Buffer.from(fileField.data, 'binary')
-  } else {
-    // 尝试转换为 ArrayBuffer 再转 Buffer
-    try {
-      const arrayBuffer = fileField.data.buffer || fileField.data
-      buffer = Buffer.from(arrayBuffer)
-    } catch (e) {
-      buffer = Buffer.from(fileField.data)
+    if (!formData || formData.length === 0) {
+      return { file: null }
     }
-  }
-  
-  console.log('[Upload Debug] final buffer length:', buffer.length)
 
-  return {
-    file: {
-      buffer: buffer,
-      originalFilename: fileField.filename || 'unknown',
-      mimetype: fileField.type,
-      size: buffer.length
+    // 查找文件字段
+    const fileField = formData.find(field => field.name === 'file' || field.name === 'image')
+
+    if (!fileField || !fileField.data) {
+      return { file: null }
     }
+
+    // 稳健的 Buffer 转换
+    let buffer
+    const data = fileField.data
+    
+    if (Buffer.isBuffer(data)) {
+      buffer = data
+    } else if (data instanceof ArrayBuffer) {
+      buffer = Buffer.from(data)
+    } else if (data instanceof Uint8Array) {
+      buffer = Buffer.from(data)
+    } else if (typeof data === 'string') {
+      buffer = Buffer.from(data, 'binary')
+    } else if (data && typeof data === 'object' && data.buffer) {
+      // 处理 TypedArray 等有 buffer 属性的对象
+      buffer = Buffer.from(data.buffer, data.byteOffset || 0, data.byteLength || data.buffer.byteLength)
+    } else {
+      // 最后的兜底处理
+      try {
+        buffer = Buffer.from(data)
+      } catch (error) {
+        console.error('[Upload] Buffer转换失败:', error)
+        throw new Error('无效的文件数据格式')
+      }
+    }
+    
+    // 验证 buffer 有效性
+    if (!buffer || buffer.length === 0) {
+      throw new Error('文件数据为空')
+    }
+
+    return {
+      file: {
+        buffer: buffer,
+        originalFilename: fileField.filename || 'unknown',
+        mimetype: fileField.type || 'application/octet-stream',
+        size: buffer.length
+      }
+    }
+  } catch (error) {
+    console.error('[Upload] 解析表单数据失败:', error)
+    throw error
   }
 }
 

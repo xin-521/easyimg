@@ -1,6 +1,7 @@
 import db from '../../utils/db.js'
 import { processImage, getImageMetadata, saveUploadedFile } from '../../utils/image.js'
 import { authMiddleware } from '../../utils/authMiddleware.js'
+import { deleteFileFromS3 } from '../../utils/s3.js'
 import { v4 as uuidv4 } from 'uuid'
 
 // 下载单个URL的图片
@@ -18,6 +19,7 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
 
   // 下载图片
   let response
+  let buffer
   try {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000) // 30秒超时
@@ -41,17 +43,34 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
       'Origin': imageUrl.origin
     }
 
-    response = await fetch(url, {
-      signal: controller.signal,
-      headers: fetchHeaders,
-      redirect: 'follow' // 自动跟随重定向
-    })
-
-    clearTimeout(timeoutId)
+    try {
+      response = await fetch(url, {
+        signal: controller.signal,
+        headers: fetchHeaders,
+        redirect: 'follow' // 自动跟随重定向
+      })
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
+
+    // 检查 Content-Type
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.startsWith('image/')) {
+      throw new Error('URL指向的不是有效的图片')
+    }
+
+    // 获取图片数据
+    try {
+      const arrayBuffer = await response.arrayBuffer()
+      buffer = Buffer.from(arrayBuffer)
+    } catch (error) {
+      throw new Error('图片数据读取失败')
+    }
+
   } catch (e) {
     if (e.name === 'AbortError') {
       throw new Error('下载超时，请稍后重试')
@@ -59,15 +78,10 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
     throw new Error(`无法下载图片: ${e.message}`)
   }
 
-  // 检查 Content-Type
-  const contentType = response.headers.get('content-type') || ''
-  if (!contentType.startsWith('image/')) {
-    throw new Error('URL指向的不是有效的图片')
+  // 验证buffer有效性
+  if (!buffer || buffer.length === 0) {
+    throw new Error('下载的图片数据为空')
   }
-
-  // 获取图片数据
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
 
   // 检查文件大小
   const maxFileSize = config.maxFileSize || 100 * 1024 * 1024
@@ -83,6 +97,7 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
     fileExt = extMatch[1]
   } else {
     // 从 Content-Type 推断
+    const contentType = response.headers.get('content-type') || ''
     const mimeToExt = {
       'image/jpeg': 'jpg',
       'image/jpg': 'jpg',
@@ -107,21 +122,39 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
   let finalFormat = fileExt
   let isWebp = false
 
-  if (config.convertToWebp && fileExt !== 'gif') {
-    processedBuffer = await processImage(buffer, {
-      format: 'webp',
-      quality: 90 // 私有 API 使用更高质量
-    })
-    finalFormat = 'webp'
-    isWebp = true
+  try {
+    if (config.convertToWebp && fileExt !== 'gif') {
+      processedBuffer = await processImage(buffer, {
+        format: 'webp',
+        quality: 90 // 私有 API 使用更高质量
+      })
+      finalFormat = 'webp'
+      isWebp = true
+    }
+  } catch (error) {
+    console.error('[URL Upload] 图片处理失败:', error)
+    // 图片处理失败时使用原始文件
+    processedBuffer = buffer
+    finalFormat = fileExt
+    isWebp = false
   }
 
   // 获取图片元数据
-  const metadata = await getImageMetadata(processedBuffer)
+  let metadata = { width: 0, height: 0 }
+  try {
+    metadata = await getImageMetadata(processedBuffer)
+  } catch (error) {
+    console.error('[URL Upload] 获取图片元数据失败:', error)
+  }
 
   // 保存文件
   const filename = `${imageUuid}.${finalFormat}`
-  await saveUploadedFile(processedBuffer, filename)
+  try {
+    await saveUploadedFile(processedBuffer, filename)
+  } catch (error) {
+    console.error('[URL Upload] 保存文件失败:', error)
+    throw new Error('文件保存失败')
+  }
 
   // 从URL提取原始文件名
   let originalName = imageUrl.pathname.split('/').pop() || 'image'
@@ -148,7 +181,20 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
     updatedAt: new Date().toISOString()
   }
 
-  const insertResult = await db.images.insert(imageDoc)
+  let insertResult
+  try {
+    insertResult = await db.images.insert(imageDoc)
+  } catch (error) {
+    console.error('[URL Upload] 数据库保存失败:', error)
+    // 尝试删除已上传的文件
+    try {
+      await deleteFileFromS3(filename)
+    } catch (deleteError) {
+      console.error('[URL Upload] 清理文件失败:', deleteError)
+    }
+    throw new Error('数据保存失败')
+  }
+  
   const imageId = insertResult._id
 
   return {
