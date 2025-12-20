@@ -1,6 +1,7 @@
 import db from '../../utils/db.js'
 import { authMiddleware } from '../../utils/authMiddleware.js'
 import { deleteImage } from '../../utils/image.js'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   // 验证登录
@@ -27,7 +28,7 @@ export default defineEventHandler(async (event) => {
         deleteImage(image.filename)
 
         // 从数据库删除记录
-        await db.images.remove({ _id: image._id })
+        await db.images.remove({ _id: new ObjectId(image._id) })
         deletedCount++
       } catch (err) {
         console.error(`删除违规图片失败 ${image.uuid}:`, err)

@@ -3,6 +3,7 @@ import { processImage, getImageMetadata, saveUploadedFile } from '../../utils/im
 import { parseFormData } from '../../utils/upload.js'
 import { v4 as uuidv4 } from 'uuid'
 import { sendUploadNotification } from '../../utils/notification.js'
+import { getPublicUrl } from '../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {
   const clientIP = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
@@ -73,16 +74,15 @@ export default defineEventHandler(async (event) => {
     // 获取图片元数据
     const metadata = await getImageMetadata(processedBuffer)
 
-    // 保存文件
+    // 保存文件到 S3
     const filename = `${imageUuid}.${finalFormat}`
-    await saveUploadedFile(processedBuffer, filename)
+    const imageUrl = await saveUploadedFile(processedBuffer, filename)
 
     // 获取用户信息（通过 ApiKey 关联）
     const uploadedBy = keyDoc.name || 'API用户'
 
     // 保存到数据库
     const imageDoc = {
-      _id: uuidv4(),
       uuid: imageUuid,
       originalName: file.originalFilename,
       filename: filename,
@@ -100,7 +100,8 @@ export default defineEventHandler(async (event) => {
       updatedAt: new Date().toISOString()
     }
 
-    await db.images.insert(imageDoc)
+    const insertResult = await db.images.insert(imageDoc)
+    const imageId = insertResult._id
 
     // 获取站点 URL 配置，用于生成完整图片链接
     const appSettingsDoc = await db.settings.findOne({ key: 'appSettings' })
@@ -115,12 +116,14 @@ export default defineEventHandler(async (event) => {
 
     // 移除末尾斜杠，确保 URL 拼接正确
     siteUrl = siteUrl.replace(/\/+$/, '')
-    const fullImageUrl = `${siteUrl}/i/${imageUuid}.${finalFormat}`
+    
+    // 使用 S3 返回的 URL 或生成完整图片链接
+    const fullImageUrl = imageUrl || `${siteUrl}/i/${imageUuid}.${finalFormat}`
 
     // 发送上传通知（异步，不阻塞响应）
     sendUploadNotification(
       {
-        id: imageDoc._id,
+        id: imageId,
         filename: filename,
         format: finalFormat,
         size: processedBuffer.length,
@@ -140,7 +143,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: '上传成功',
       data: {
-        id: imageDoc._id,
+        id: imageId,
         uuid: imageUuid,
         filename: filename,
         format: finalFormat,

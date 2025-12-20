@@ -131,7 +131,6 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
 
   // 保存到数据库
   const imageDoc = {
-    _id: uuidv4(),
     uuid: imageUuid,
     originalName: originalName,
     filename: filename,
@@ -149,10 +148,11 @@ async function downloadAndSaveImage(url, config, user, clientIP) {
     updatedAt: new Date().toISOString()
   }
 
-  await db.images.insert(imageDoc)
+  const insertResult = await db.images.insert(imageDoc)
+  const imageId = insertResult._id
 
   return {
-    id: imageDoc._id,
+    id: imageId,
     uuid: imageUuid,
     filename: filename,
     format: finalFormat,

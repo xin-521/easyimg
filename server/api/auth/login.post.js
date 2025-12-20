@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
 
     // 生成 Token
     const token = await generateToken({
-      userId: user._id,
+      userId: user._id.toString(),
       username: user.username
     })
 

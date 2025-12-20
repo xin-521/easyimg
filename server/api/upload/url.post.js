@@ -167,7 +167,6 @@ export default defineEventHandler(async (event) => {
 
     // 保存到数据库
     const imageDoc = {
-      _id: uuidv4(),
       uuid: imageUuid,
       originalName: originalName,
       filename: filename,
@@ -185,14 +184,15 @@ export default defineEventHandler(async (event) => {
       updatedAt: new Date().toISOString()
     }
 
-    await db.images.insert(imageDoc)
+    const insertResult = await db.images.insert(imageDoc)
+    const imageId = insertResult._id
 
     // 返回结果
     return {
       success: true,
       message: '上传成功',
       data: {
-        id: imageDoc._id,
+        id: imageId,
         uuid: imageUuid,
         filename: filename,
         format: finalFormat,

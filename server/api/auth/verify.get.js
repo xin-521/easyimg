@@ -1,5 +1,6 @@
 import { verifyToken, extractToken } from '../../utils/jwt.js'
 import db from '../../utils/db.js'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -23,7 +24,18 @@ export default defineEventHandler(async (event) => {
     }
 
     // 验证用户是否存在
-    const user = await db.users.findOne({ _id: decoded.userId })
+    let objectId
+    try {
+      objectId = new ObjectId(decoded.userId)
+    } catch (err) {
+      return {
+        success: false,
+        authenticated: false,
+        message: '无效的用户 ID'
+      }
+    }
+
+    const user = await db.users.findOne({ _id: objectId })
     if (!user) {
       return {
         success: false,

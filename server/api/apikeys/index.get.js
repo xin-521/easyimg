@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
 
     // 返回 ApiKey 列表
     const safeKeys = apiKeys.map(key => ({
-      id: key._id,
+      id: key._id.toString(),
       key: key.key,
       name: key.name,
       isDefault: key.isDefault || false,

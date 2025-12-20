@@ -1,5 +1,6 @@
 import db from '../../../utils/db.js'
 import { authMiddleware } from '../../../utils/authMiddleware.js'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   // 验证登录
@@ -15,8 +16,19 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 将字符串 ID 转换为 ObjectId
+    let objectId
+    try {
+      objectId = new ObjectId(id)
+    } catch (err) {
+      throw createError({
+        statusCode: 400,
+        message: '无效的图片 ID'
+      })
+    }
+
     // 查找图片
-    const image = await db.images.findOne({ _id: id })
+    const image = await db.images.findOne({ _id: objectId })
     if (!image) {
       throw createError({
         statusCode: 404,
@@ -48,7 +60,7 @@ export default defineEventHandler(async (event) => {
     }
 
     await db.images.update(
-      { _id: id },
+      { _id: objectId },
       { $set: updateData }
     )
 

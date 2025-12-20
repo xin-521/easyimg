@@ -4,46 +4,6 @@
 
 _✨ 简单易用的个人图床系统，基于 Nuxt.js 构建 ✨_
 
-<a href="https://github.com/chaos-zhu/easyimg/releases/latest">
-  <img src="https://img.shields.io/github/v/release/chaos-zhu/easyimg?color=brightgreen" alt="release">
-</a>
-
-<a href="https://github.com/chaos-zhu/easyimg">
-  <img src="https://img.shields.io/badge/Apache-License2.0-green" alt="License">
-</a>
-
-<a href="https://github.com/chaos-zhu/easyimg">
-  <img src="https://img.shields.io/badge/EasyImg-图床-blue" alt="easyimg">
-</a>
-
-
-
-[功能特性](#功能特性) • [快速开始](#快速开始) • [配置说明](#配置说明) • [API 文档](#api-文档) • [常见问题](#常见问题)
-
-</div>
-
-## 项目预览
-
-<details>
-<summary>点击展开查看项目截图</summary>
-
-![项目预览1](md-images/img1.jpg)
-
-![项目预览2](md-images/img2.jpg)
-
-![项目预览3](md-images/img3.jpg)
-
-![项目预览4](md-images/img4.jpg)
-
-![项目预览5](md-images/img5.jpg)
-
-![项目预览6](md-images/img6.jpg)
-
-![项目预览7](md-images/img7.jpg)
-
-![项目预览8](md-images/img8.jpg)
-
-</details>
 
 ## 功能特性
 
@@ -88,40 +48,33 @@ _✨ 简单易用的个人图床系统，基于 Nuxt.js 构建 ✨_
 
 ## 快速开始
 
-### Docker Compose 部署（推荐）
+### 前置要求
 
-```bash
-# 1. 创建 easyimg 目录
-mkdir -p /root/easyimg && cd /root/easyimg
-
-
-# 2. 下载docker-compose.yml文件
-wget https://git.221022.xyz/https://raw.githubusercontent.com/chaos-zhu/easyimg/refs/heads/main/docker-compose.yml
-
-# 使用 docker-compose
-docker compose up -d
-```
-
-### Docker run部署
-
-```bash
-docker run -d --name easyimg -p 3000:3000 -v ./db:/app/db -v ./uploads:/app/uploads ghcr.io/chaos-zhu/easyimg:latest
-```
-
+- Node.js 18.0 或更高版本
+- MongoDB 4.4 或更高版本
+- pnpm 包管理器
 
 ### 手动部署
 
 ```bash
-# 安装依赖
+# 1. 克隆项目
+git clone https://github.com/chaos-zhu/easyimg.git
+cd easyimg
+
+# 2. 安装依赖
 pnpm install
 
-# 开发模式
+# 3. 配置环境变量
+cp .env.example .env
+# 编辑 .env 文件，设置 MongoDB 连接字符串和 S3 配置（可选）
+
+# 4. 开发模式运行
 pnpm dev
 
-# 构建生产版本
+# 5. 构建生产版本
 pnpm build
 
-# 启动生产服务
+# 6. 启动生产服务
 node .output/server/index.mjs
 ```
 
@@ -144,42 +97,351 @@ node .output/server/index.mjs
 | `HOST` | 监听地址 | `0.0.0.0` |
 | `NODE_ENV` | 运行环境 | `production` | -->
 
+### 环境变量
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `MONGODB_URI` | MongoDB 连接字符串 | `mongodb://localhost:27017/easyimg` |
+| `NODE_ENV` | 运行环境 | `production` |
+| `PORT` | 服务端口 | `3000` |
+| `HOST` | 监听地址 | `0.0.0.0` |
+
+### S3 存储配置（可选）
+
+如需使用 S3 兼容存储服务（如七牛云、阿里云OSS、AWS S3等），请配置以下环境变量：
+
+| 变量名 | 说明 | 必需 |
+|--------|------|------|
+| `S3_REGION` | S3 存储区域 | 是 |
+| `S3_ACCESS_KEY_ID` | S3 访问密钥ID | 是 |
+| `S3_SECRET_ACCESS_KEY` | S3 访问密钥 | 是 |
+| `S3_BUCKET_NAME` | S3 存储桶名称 | 是 |
+| `S3_ENDPOINT` | S3 服务端点（可选） | 否 |
+| `S3_FORCE_PATH_STYLE` | 强制使用路径样式（可选） | 否 |
+| `S3_BASE_URL` | CDN或自定义域名前缀（可选） | 否 |
+
 ### 数据持久化
 
-- `db/` - 数据库文件（NeDB）
-- `uploads/` - 上传的图片文件
+- **MongoDB** - 存储应用数据、用户信息、图片元数据等
+- **S3存储** - 存储图片文件（如果配置了S3）
+- **本地存储** - 未配置S3时，图片存储在 `uploads/` 目录
 
-使用 Docker 部署时，请确保挂载数据目录：
+> 📝 建议使用 MongoDB Atlas 云数据库和 S3 存储服务以获得更好的稳定性和性能。
 
-```yaml
-volumes:
-  - ./data:/app/data
-  - ./uploads:/app/uploads
+## API 文档
+
+### 基础信息
+
+- **Base URL**: `https://your-domain.com/api`
+- **认证方式**: JWT Token 或 API Key
+- **Content-Type**: `application/json`
+
+### 认证接口
+
+#### 用户登录
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "your-username",
+  "password": "your-password"
+}
 ```
 
-## 常见问题
+#### 验证Token
+```http
+GET /api/auth/verify
+Authorization: Bearer <token>
+```
+
+#### 用户登出
+```http
+POST /api/auth/logout
+Authorization: Bearer <token>
+```
+
+### 图片上传接口
+
+#### 文件上传（multipart/form-data）
+```http
+POST /api/upload/private
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+file: <图片文件>
+```
+
+#### 公共上传（无需认证）
+```http
+POST /api/upload/public
+Content-Type: multipart/form-data
+
+file: <图片文件>
+```
+
+#### URL 上传
+```http
+POST /api/upload/url
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "url": "https://example.com/image.jpg"
+}
+```
+
+#### 批量 URL 上传
+```http
+POST /api/upload/urls
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "urls": [
+    "https://example.com/image1.jpg",
+    "https://example.com/image2.jpg"
+  ]
+}
+```
+
+### 图片管理接口
+
+#### 获取图片列表
+```http
+GET /api/images?page=1&limit=20
+Authorization: Bearer <token>
+```
+
+#### 删除图片
+```http
+DELETE /api/images/{id}
+Authorization: Bearer <token>
+```
+
+#### 批量删除图片
+```http
+DELETE /api/images/batch
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "ids": ["id1", "id2", "id3"]
+}
+```
+
+#### 获取违规图片
+```http
+GET /api/images/nsfw
+Authorization: Bearer <token>
+```
+
+#### 取消违规标记
+```http
+PUT /api/images/{id}/unmark-nsfw
+Authorization: Bearer <token>
+```
+
+### API Key 管理
+
+#### 获取 API Key 列表
+```http
+GET /api/apikeys
+Authorization: Bearer <token>
+```
+
+#### 创建 API Key
+```http
+POST /api/apikeys
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "My API Key",
+  "description": "Description for this API key"
+}
+```
+
+#### 更新 API Key
+```http
+PUT /api/apikeys/{id}
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "Updated Name",
+  "description": "Updated description"
+}
+```
+
+#### 删除 API Key
+```http
+DELETE /api/apikeys/{id}
+Authorization: Bearer <token>
+```
+
+### 系统设置接口
+
+#### 获取设置
+```http
+GET /api/settings
+Authorization: Bearer <token>
+```
+
+#### 更新设置
+```http
+PUT /api/settings
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "appName": "My EasyImg",
+  "maxFileSize": 10485760,
+  "allowedFormats": ["jpg", "png", "gif"]
+}
+```
+
+#### 获取统计信息
+```http
+GET /api/settings/stats
+Authorization: Bearer <token>
+```
+
+### 通知配置接口
+
+#### 获取通知配置
+```http
+GET /api/notification
+Authorization: Bearer <token>
+```
+
+#### 更新通知配置
+```http
+PUT /api/notification
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "webhook": {
+    "enabled": true,
+    "url": "https://your-webhook-url.com"
+  },
+  "telegram": {
+    "enabled": false,
+    "token": "",
+    "chatId": ""
+  }
+}
+```
+
+#### 测试通知
+```http
+POST /api/notification/test
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "type": "webhook"
+}
+```
+
+### IP 黑名单接口
+
+#### 获取黑名单列表
+```http
+GET /api/blacklist
+Authorization: Bearer <token>
+```
+
+#### 添加 IP 到黑名单
+```http
+POST /api/blacklist
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "ip": "192.168.1.1",
+  "reason": "Spam uploads"
+}
+```
+
+#### 从黑名单移除 IP
+```http
+DELETE /api/blacklist/{id}
+Authorization: Bearer <token>
+```
+
+### 响应格式
+
+#### 成功响应
+```json
+{
+  "success": true,
+  "data": {
+    // 具体数据
+  },
+  "message": "操作成功"
+}
+```
+
+#### 错误响应
+```json
+{
+  "success": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "未授权访问"
+  }
+}
+```
+
+### 错误代码
+
+| 错误代码 | HTTP状态码 | 说明 |
+|---------|-----------|------|
+| `UNAUTHORIZED` | 401 | 未授权访问 |
+| `FORBIDDEN` | 403 | 禁止访问 |
+| `NOT_FOUND` | 404 | 资源不存在 |
+| `VALIDATION_ERROR` | 400 | 参数验证失败 |
+| `RATE_LIMIT_EXCEEDED` | 429 | 请求频率超限 |
+| `INTERNAL_ERROR` | 500 | 服务器内部错误 |
+
+### 使用 API Key 调用
+
+除了 JWT Token，您也可以使用 API Key 进行认证：
+
+```bash
+curl -X GET "https://your-domain.com/api/images" \
+  -H "X-API-Key: your-api-key-here"
+```
 
 ### Q: 如何重置管理员密码？
 
-删除 `db/admin.db` 文件后重启服务，系统会重新创建默认账户。
+连接到 MongoDB 数据库，删除 `users` 集合中的管理员账户后重启服务，系统会重新创建默认账户。
+
+```javascript
+// 使用 MongoDB Shell
+use easyimg
+db.users.deleteOne({ username: "easyimg" })
+```
 
 ### Q: 如何备份数据？
 
-备份 `db和uploads` 目录即可，包含所有数据库文件和上传的图片。
+备份 MongoDB 数据库和 uploads 目录即可，包含所有数据库数据和上传的图片。
+
+```bash
+# 备份 MongoDB 数据库
+mongodump --uri="mongodb://localhost:27017/easyimg" --out=./backup
+
+# 备份图片文件
+cp -r uploads ./backup/
+```
 
 ### Q: 支持哪些图片格式？
 
 默认支持：JPEG、JPG、PNG、GIF、WebP、AVIF、SVG、BMP、ICO、APNG、TIFF
 
-## 作者其他项目
 
-- [EasyNode](https://github.com/chaos-zhu/easynode) - 多功能 Linux & Windows 服务器 WEB 终端面板
-- [EasyNavTab](https://github.com/chaos-zhu/easynavtab) - 开源浏览器插件，自定义新标签页
-
-## 交流反馈
-
-- **Telegram 频道**：[https://t.me/easynode_notify](https://t.me/easynode_notify)
-- **GitHub Issues**：[提交问题](https://github.com/chaos-zhu/easyimg/issues)
 
 ## 开源协议
 

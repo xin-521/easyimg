@@ -10,6 +10,8 @@
     "preview": "nuxt preview"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.956.0",
+    "@aws-sdk/s3-request-presigner": "^3.956.0",
     "@iconify/vue": "^5.0.0",
     "@nuxt/icon": "^2.1.0",
     "@pinia/nuxt": "^0.11.3",
@@ -19,6 +21,7 @@
     "form-data": "^4.0.1",
     "jsonwebtoken": "^9.0.3",
     "masonry-layout": "^4.2.2",
+    "mongodb": "^7.0.0",
     "multer": "^2.0.2",
     "node-telegram-bot-api": "^0.67.0",
     "nodemailer": "^7.0.11",

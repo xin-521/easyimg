@@ -1,18 +1,7 @@
 import sharp from 'sharp'
 import { v4 as uuidv4 } from 'uuid'
-import { join, extname } from 'path'
-import { existsSync, mkdirSync, unlinkSync } from 'fs'
-import { writeFile } from 'fs/promises'
-
-// 上传目录：生产环境使用 /app/uploads，开发环境使用项目根目录下的 uploads
-const uploadsDir = process.env.NODE_ENV === 'production'
-  ? '/app/uploads'
-  : join(process.cwd(), 'uploads')
-
-// 确保 uploads 目录存在
-if (!existsSync(uploadsDir)) {
-  mkdirSync(uploadsDir, { recursive: true })
-}
+import { extname } from 'path'
+import { uploadFileToS3, deleteFileFromS3, getPublicUrl } from './s3.js'
 
 // 支持的图片格式
 export const COMMON_FORMATS = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'apng', 'tiff', 'tif']
@@ -61,12 +50,32 @@ export async function processImage(buffer, options = {}) {
 }
 
 /**
- * 保存上传的文件到磁盘
+ * 保存上传的文件到 S3
  */
 export async function saveUploadedFile(buffer, filename) {
-  const filepath = join(uploadsDir, filename)
-  await writeFile(filepath, buffer)
-  return filepath
+  // 根据文件扩展名确定 MIME 类型
+  const ext = extname(filename).toLowerCase().replace('.', '')
+  const mimeTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'bmp': 'image/bmp',
+    'ico': 'image/x-icon',
+    'svg': 'image/svg+xml',
+    'avif': 'image/avif',
+    'tiff': 'image/tiff',
+    'tif': 'image/tiff'
+  }
+  
+  const contentType = mimeTypes[ext] || 'application/octet-stream'
+  
+  // 上传到 S3
+  await uploadFileToS3(buffer, filename, contentType)
+  
+  // 返回公共访问 URL
+  return getPublicUrl(filename)
 }
 
 /**
@@ -100,24 +109,45 @@ export async function convertToWebP(buffer) {
 }
 
 /**
- * 保存图片到磁盘
+ * 保存图片到 S3
  */
 export async function saveImage(buffer, filename) {
-  const filepath = join(uploadsDir, filename)
-  await sharp(buffer).toFile(filepath)
-  return filepath
+  // 根据文件扩展名确定 MIME 类型
+  const ext = extname(filename).toLowerCase().replace('.', '')
+  const mimeTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'bmp': 'image/bmp',
+    'ico': 'image/x-icon',
+    'svg': 'image/svg+xml',
+    'avif': 'image/avif',
+    'tiff': 'image/tiff',
+    'tif': 'image/tiff'
+  }
+  
+  const contentType = mimeTypes[ext] || 'application/octet-stream'
+  
+  // 上传到 S3
+  await uploadFileToS3(buffer, filename, contentType)
+  
+  // 返回公共访问 URL
+  return getPublicUrl(filename)
 }
 
 /**
- * 删除图片文件
+ * 删除 S3 中的图片文件
  */
-export function deleteImage(filename) {
-  const filepath = join(uploadsDir, filename)
-  if (existsSync(filepath)) {
-    unlinkSync(filepath)
+export async function deleteImage(filename) {
+  try {
+    await deleteFileFromS3(filename)
     return true
+  } catch (error) {
+    console.error('删除图片失败:', error)
+    return false
   }
-  return false
 }
 
 /**
@@ -143,17 +173,10 @@ export function isValidFormat(format, allowedFormats) {
 }
 
 /**
- * 获取 uploads 目录路径
- */
-export function getUploadsDir() {
-  return uploadsDir
-}
-
-/**
- * 获取图片文件路径
+ * 获取图片文件的公共访问 URL
  */
 export function getImageFilePath(filename) {
-  return join(uploadsDir, filename)
+  return getPublicUrl(filename)
 }
 
 export default {
@@ -166,6 +189,5 @@ export default {
   deleteImage,
   generateFilename,
   getExtension,
-  isValidFormat,
-  getUploadsDir
+  isValidFormat
 }

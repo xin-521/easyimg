@@ -1,6 +1,7 @@
 import db from '../../utils/db.js'
 import { verifyToken, extractToken } from '../../utils/jwt.js'
 import bcrypt from 'bcryptjs'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -40,7 +41,7 @@ export default defineEventHandler(async (event) => {
     }
 
     // 获取用户
-    const dbUser = await db.users.findOne({ _id: user.userId })
+    const dbUser = await db.users.findOne({ _id: new ObjectId(user.userId) })
     if (!dbUser) {
       throw createError({
         statusCode: 404,
@@ -62,7 +63,7 @@ export default defineEventHandler(async (event) => {
 
     // 更新密码
     await db.users.update(
-      { _id: user.userId },
+      { _id: new ObjectId(user.userId) },
       {
         $set: {
           password: hashedPassword,

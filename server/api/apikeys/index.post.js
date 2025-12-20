@@ -36,7 +36,6 @@ export default defineEventHandler(async (event) => {
     const apiKey = `sk-${uuidv4().replace(/-/g, '')}`
 
     const newKey = {
-      _id: uuidv4(),
       key: apiKey,
       name: name.trim(),
       isDefault: false,
@@ -45,13 +44,14 @@ export default defineEventHandler(async (event) => {
       updatedAt: new Date().toISOString()
     }
 
-    await db.apikeys.insert(newKey)
+    const insertResult = await db.apikeys.insert(newKey)
+    const keyId = insertResult._id
 
     return {
       success: true,
       message: 'ApiKey 创建成功',
       data: {
-        id: newKey._id,
+        id: keyId.toString(),
         key: newKey.key,
         name: newKey.name,
         isDefault: newKey.isDefault,

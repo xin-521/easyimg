@@ -1,6 +1,8 @@
 import db from '../../utils/db.js'
 import { verifyToken, extractToken } from '../../utils/jwt.js'
 import { deleteImage } from '../../utils/image.js'
+import { deleteFileFromS3 } from '../../utils/s3.js'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -37,11 +39,11 @@ export default defineEventHandler(async (event) => {
 
     for (const image of deletedImages) {
       try {
-        // 删除物理文件
-        deleteImage(image.filename)
+        // 从 S3 删除文件
+        await deleteFileFromS3(image.filename)
 
         // 从数据库删除记录
-        await db.images.remove({ _id: image._id })
+        await db.images.remove({ _id: new ObjectId(image._id) })
         deletedCount++
       } catch (err) {
         console.error(`删除图片失败 ${image.uuid}:`, err)

@@ -1,6 +1,6 @@
 import db from './db.js'
 import { moderateImage } from './moderation.js'
-import { v4 as uuidv4 } from 'uuid'
+import { ObjectId } from 'mongodb'
 import { addToBlacklist } from './ipBlacklist.js'
 import { sendNsfwNotification } from './notification.js'
 
@@ -32,7 +32,7 @@ const PROCESS_INTERVAL = 5 * 1000  // 正常处理间隔 5 秒
  */
 export async function createModerationTask(imageId, imageUuid, filename) {
   const task = {
-    _id: uuidv4(),
+    _id: new ObjectId(),
     imageId: imageId,
     imageUuid: imageUuid,
     filename: filename,
@@ -69,7 +69,7 @@ async function getNextPendingTask() {
     if (task.status === 'failed' && task.retryCount >= MAX_RETRY_COUNT) {
       // 超过最大重试次数，标记为 error
       await db.moderationTasks.update(
-        { _id: task._id },
+        { _id: new ObjectId(task._id) },
         {
           $set: {
             status: 'error',
@@ -94,7 +94,7 @@ async function processTask(task) {
 
   // 更新任务状态为处理中
   await db.moderationTasks.update(
-    { _id: task._id },
+    { _id: new ObjectId(task._id) },
     {
       $set: {
         status: 'processing',
@@ -130,7 +130,7 @@ async function processTask(task) {
     if (result.success) {
       // 审核成功
       await db.moderationTasks.update(
-        { _id: task._id },
+        { _id: new ObjectId(task._id) },
         {
           $set: {
             status: 'completed',
@@ -142,7 +142,7 @@ async function processTask(task) {
 
       // 更新图片审核状态
       await db.images.update(
-        { _id: task.imageId },
+        { _id: new ObjectId(task.imageId) },
         {
           $set: {
             moderationStatus: 'completed',
@@ -161,7 +161,7 @@ async function processTask(task) {
         // 如果开启了自动拉黑 IP，将上传者 IP 加入黑名单
         if (contentSafetyConfig.autoBlacklistIp) {
           // 获取图片的上传者 IP
-          const image = await db.images.findOne({ _id: task.imageId })
+          const image = await db.images.findOne({ _id: new ObjectId(task.imageId) })
           if (image?.ip && image.ip !== 'unknown') {
             try {
               await addToBlacklist(image.ip, `自动拉黑：上传违规图片 ${task.imageUuid}`)
@@ -204,7 +204,7 @@ async function processTask(task) {
       // 审核失败，需要重试
       const newRetryCount = (task.retryCount || 0) + 1
       await db.moderationTasks.update(
-        { _id: task._id },
+        { _id: new ObjectId(task._id) },
         {
           $set: {
             status: 'failed',
@@ -217,7 +217,7 @@ async function processTask(task) {
 
       // 更新图片审核状态
       await db.images.update(
-        { _id: task.imageId },
+        { _id: new ObjectId(task.imageId) },
         {
           $set: {
             moderationStatus: 'failed',
@@ -236,7 +236,7 @@ async function processTask(task) {
     // 处理异常
     const newRetryCount = (task.retryCount || 0) + 1
     await db.moderationTasks.update(
-      { _id: task._id },
+      { _id: new ObjectId(task._id) },
       {
         $set: {
           status: 'failed',

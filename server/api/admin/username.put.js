@@ -1,5 +1,6 @@
 import db from '../../utils/db.js'
 import { verifyToken, extractToken, generateToken } from '../../utils/jwt.js'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -51,7 +52,7 @@ export default defineEventHandler(async (event) => {
 
     // 更新用户名
     await db.users.update(
-      { _id: user.userId },
+      { _id: new ObjectId(user.userId) },
       {
         $set: {
           username: username.trim(),

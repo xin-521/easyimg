@@ -1,21 +1,10 @@
-import { existsSync, mkdirSync, unlinkSync } from 'fs'
-import { writeFile } from 'fs/promises'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
+import { ObjectId } from 'mongodb'
 import { processImage, getImageMetadata } from './image.js'
+import { uploadFileToS3, deleteFileFromS3, getPublicUrl } from './s3.js'
 import db from './db.js'
-
-// 上传目录：生产环境使用 /app/uploads，开发环境使用项目根目录下的 uploads
-const uploadsDir = process.env.NODE_ENV === 'production'
-  ? '/app/uploads'
-  : join(process.cwd(), 'uploads')
-
-// 确保上传目录存在
-if (!existsSync(uploadsDir)) {
-  mkdirSync(uploadsDir, { recursive: true })
-}
-
-console.log('[Upload] 上传目录:', uploadsDir)
 
 /**
  * 解析 multipart/form-data 请求
@@ -68,7 +57,7 @@ export function validateSize(size, maxSize) {
 }
 
 /**
- * 保存图片文件
+ * 保存图片文件到 S3
  * @param {Buffer} buffer - 图片数据
  * @param {Object} options - 配置选项
  * @param {string} options.originalName - 原始文件名
@@ -108,16 +97,32 @@ export async function saveUploadedImage(buffer, options) {
   // 获取图片信息
   const imageInfo = await getImageMetadata(finalBuffer)
 
-  // 生成文件名和路径
+  // 生成文件名
   const filename = `${uuid}.${finalExt}`
-  const filepath = join(uploadsDir, filename)
 
-  // 保存文件
-  await writeFile(filepath, finalBuffer)
+  // 根据 MIME 类型映射
+  const mimeTypes = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'bmp': 'image/bmp',
+    'ico': 'image/x-icon',
+    'svg': 'image/svg+xml',
+    'avif': 'image/avif',
+    'tiff': 'image/tiff',
+    'tif': 'image/tiff'
+  }
+  
+  const contentType = mimeTypes[finalExt] || 'application/octet-stream'
+
+  // 上传到 S3
+  await uploadFileToS3(finalBuffer, filename, contentType)
 
   // 保存到数据库
   const imageRecord = {
-    _id: uuidv4(),
+    _id: new ObjectId(),
     uuid,
     originalName,
     filename,
@@ -149,27 +154,29 @@ export async function saveUploadedImage(buffer, options) {
 }
 
 /**
- * 删除图片文件
+ * 删除 S3 中的图片文件
  */
 export async function deleteImageFile(filename) {
-  const filepath = join(uploadsDir, filename)
-  if (existsSync(filepath)) {
-    unlinkSync(filepath)
+  try {
+    await deleteFileFromS3(filename)
     return true
+  } catch (error) {
+    console.error('删除图片文件失败:', error)
+    return false
   }
-  return false
 }
 
 /**
- * 获取图片文件路径
+ * 获取图片文件的公共访问 URL
  */
 export function getImagePath(filename) {
-  return join(uploadsDir, filename)
+  return getPublicUrl(filename)
 }
 
 /**
- * 获取上传目录路径
+ * 获取上传目录路径（已弃用，保留用于兼容性）
  */
 export function getUploadsDirPath() {
-  return uploadsDir
+  console.warn('[Upload] getUploadsDirPath 已弃用：现在使用 S3 存储')
+  return 's3://'
 }

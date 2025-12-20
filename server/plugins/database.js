@@ -119,30 +119,30 @@ async function initAppSettings() {
 // 创建数据库索引
 async function createIndexes() {
   // 用户表索引
-  await db.users.ensureIndex({ fieldName: 'username', unique: true })
+  await db.users.ensureIndex({ username: 1 }, { unique: true })
 
   // 图片表索引
-  await db.images.ensureIndex({ fieldName: 'uuid', unique: true })
-  await db.images.ensureIndex({ fieldName: 'uploadedAt' })
-  await db.images.ensureIndex({ fieldName: 'isDeleted' })
-  await db.images.ensureIndex({ fieldName: 'uploadedBy' })
-  await db.images.ensureIndex({ fieldName: 'moderationStatus' })  // 审核状态索引
-  await db.images.ensureIndex({ fieldName: 'isNsfw' })            // 违规标记索引
+  await db.images.ensureIndex({ uuid: 1 }, { unique: true })
+  await db.images.ensureIndex({ uploadedAt: 1 })
+  await db.images.ensureIndex({ isDeleted: 1 })
+  await db.images.ensureIndex({ uploadedBy: 1 })
+  await db.images.ensureIndex({ moderationStatus: 1 })  // 审核状态索引
+  await db.images.ensureIndex({ isNsfw: 1 })            // 违规标记索引
 
   // ApiKey 表索引
-  await db.apikeys.ensureIndex({ fieldName: 'key', unique: true })
+  await db.apikeys.ensureIndex({ key: 1 }, { unique: true })
 
   // 设置表索引
-  await db.settings.ensureIndex({ fieldName: 'key', unique: true })
+  await db.settings.ensureIndex({ key: 1 }, { unique: true })
 
   // 审核任务表索引
-  await db.moderationTasks.ensureIndex({ fieldName: 'imageId' })
-  await db.moderationTasks.ensureIndex({ fieldName: 'status' })
-  await db.moderationTasks.ensureIndex({ fieldName: 'createdAt' })
+  await db.moderationTasks.ensureIndex({ imageId: 1 })
+  await db.moderationTasks.ensureIndex({ status: 1 })
+  await db.moderationTasks.ensureIndex({ createdAt: 1 })
 
   // IP 黑名单表索引
-  await db.ipBlacklist.ensureIndex({ fieldName: 'ip', unique: true })
-  await db.ipBlacklist.ensureIndex({ fieldName: 'createdAt' })
+  await db.ipBlacklist.ensureIndex({ ip: 1 }, { unique: true })
+  await db.ipBlacklist.ensureIndex({ createdAt: 1 })
 
   console.log('[Database] 数据库索引已创建')
 }

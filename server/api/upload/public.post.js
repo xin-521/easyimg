@@ -11,6 +11,7 @@ import {
 import { createModerationTask } from '../../utils/moderationQueue.js'
 import { isBlacklisted } from '../../utils/ipBlacklist.js'
 import { sendUploadNotification } from '../../utils/notification.js'
+import { getPublicUrl } from '../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {
   const clientIP = getRequestIP(event, { xForwardedFor: true }) || 'unknown'
@@ -111,16 +112,15 @@ export default defineEventHandler(async (event) => {
     // 获取图片元数据
     const metadata = await getImageMetadata(processedBuffer)
 
-    // 保存文件
+    // 保存文件到 S3
     const filename = `${imageUuid}.${finalFormat}`
-    await saveUploadedFile(processedBuffer, filename)
+    const imageUrl = await saveUploadedFile(processedBuffer, filename)
 
     // 判断是否启用内容安全检测
     const contentSafetyEnabled = config.contentSafety?.enabled || false
 
     // 保存到数据库
     const imageDoc = {
-      _id: uuidv4(),
       uuid: imageUuid,
       originalName: file.originalFilename,
       filename: filename,
@@ -143,12 +143,13 @@ export default defineEventHandler(async (event) => {
       isNsfw: false
     }
 
-    await db.images.insert(imageDoc)
+    const insertResult = await db.images.insert(imageDoc)
+    const imageId = insertResult._id
 
     // 如果启用了内容安全检测，创建审核任务
     if (contentSafetyEnabled) {
       try {
-        await createModerationTask(imageDoc._id, imageUuid, filename)
+        await createModerationTask(imageId, imageUuid, filename)
       } catch (err) {
         console.error('[Upload] 创建审核任务失败:', err)
         // 审核任务创建失败不影响上传结果
@@ -171,12 +172,14 @@ export default defineEventHandler(async (event) => {
 
     // 移除末尾斜杠，确保 URL 拼接正确
     siteUrl = siteUrl.replace(/\/+$/, '')
-    const fullImageUrl = `${siteUrl}/i/${imageUuid}.${finalFormat}`
+    
+    // 使用 S3 返回的 URL 或生成完整图片链接
+    const fullImageUrl = imageUrl || `${siteUrl}/i/${imageUuid}.${finalFormat}`
 
     // 发送上传通知（异步，不阻塞响应）
     sendUploadNotification(
       {
-        id: imageDoc._id,
+        id: imageId,
         filename: filename,
         format: finalFormat,
         size: processedBuffer.length,
@@ -196,7 +199,7 @@ export default defineEventHandler(async (event) => {
       success: true,
       message: '上传成功',
       data: {
-        id: imageDoc._id,
+        id: imageId,
         uuid: imageUuid,
         filename: filename,
         format: finalFormat,

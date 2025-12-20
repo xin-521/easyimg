@@ -1,5 +1,5 @@
 import db from './db.js'
-import { v4 as uuidv4 } from 'uuid'
+import { ObjectId } from 'mongodb'
 
 /**
  * IP 黑名单管理工具
@@ -36,7 +36,7 @@ export async function addToBlacklist(ip, reason = '') {
   }
 
   const record = {
-    _id: uuidv4(),
+    _id: new ObjectId(),
     ip: ip,
     reason: reason,
     createdAt: new Date().toISOString()
@@ -77,15 +77,20 @@ export async function removeFromBlacklistById(id) {
     return { success: false, error: '无效的 ID' }
   }
 
-  const record = await db.ipBlacklist.findOne({ _id: id })
-  if (!record) {
-    return { success: false, error: '记录不存在' }
+  try {
+    const objectId = new ObjectId(id)
+    const record = await db.ipBlacklist.findOne({ _id: objectId })
+    if (!record) {
+      return { success: false, error: '记录不存在' }
+    }
+
+    await db.ipBlacklist.remove({ _id: objectId })
+    console.log(`[IPBlacklist] IP ${record.ip} 已从黑名单中移除`)
+
+    return { success: true, ip: record.ip }
+  } catch (error) {
+    return { success: false, error: '无效的 ID 格式' }
   }
-
-  await db.ipBlacklist.remove({ _id: id })
-  console.log(`[IPBlacklist] IP ${record.ip} 已从黑名单中移除`)
-
-  return { success: true, ip: record.ip }
 }
 
 /**

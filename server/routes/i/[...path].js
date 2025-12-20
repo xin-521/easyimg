@@ -2,6 +2,7 @@ import { createReadStream, existsSync } from 'fs'
 import { createHash } from 'crypto'
 import db from '../../utils/db.js'
 import { getImagePath } from '../../utils/upload.js'
+import { getFileFromS3 } from '../../utils/s3.js'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -58,11 +59,12 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // 检查文件是否存在
-    const filePath = getImagePath(image.filename)
-
-    if (!existsSync(filePath)) {
-      console.log('[Image Route] File does not exist')
+    // 检查文件是否存在并获取文件内容
+    let imageBuffer
+    try {
+      imageBuffer = await getFileFromS3(image.filename)
+    } catch (error) {
+      console.log('[Image Route] File does not exist in S3')
       throw createError({
         statusCode: 404,
         message: '图片文件不存在'
@@ -101,15 +103,15 @@ export default defineEventHandler(async (event) => {
 
     // 设置完善的缓存响应头
     setHeader(event, 'Content-Type', contentType)
-    setHeader(event, 'Content-Length', image.size)
+    setHeader(event, 'Content-Length', imageBuffer.length)
     setHeader(event, 'Cache-Control', `public, max-age=${maxAge}, immutable`) // 365天缓存，immutable表示内容不会变化
     setHeader(event, 'Expires', expires) // 兼容旧浏览器
     setHeader(event, 'ETag', etag) // 支持条件请求
     setHeader(event, 'Last-Modified', new Date(image.createdAt).toUTCString()) // 最后修改时间
     setHeader(event, 'X-Content-Type-Options', 'nosniff') // 安全头
 
-    // 返回文件流
-    return sendStream(event, createReadStream(filePath))
+    // 返回图片数据
+    return imageBuffer
   } catch (error) {
     if (error.statusCode) {
       throw error

@@ -1,6 +1,7 @@
 import db from '../../utils/db.js'
 import { verifyToken, extractToken } from '../../utils/jwt.js'
 import { v4 as uuidv4 } from 'uuid'
+import { ObjectId } from 'mongodb'
 
 export default defineEventHandler(async (event) => {
   try {
@@ -30,8 +31,19 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    // 将字符串 ID 转换为 ObjectId
+    let objectId
+    try {
+      objectId = new ObjectId(id)
+    } catch (err) {
+      throw createError({
+        statusCode: 400,
+        message: '无效的 ApiKey ID'
+      })
+    }
+
     // 查找 ApiKey
-    const apiKey = await db.apikeys.findOne({ _id: id })
+    const apiKey = await db.apikeys.findOne({ _id: objectId })
     if (!apiKey) {
       throw createError({
         statusCode: 404,
@@ -62,16 +74,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // 更新
-    await db.apikeys.update({ _id: id }, { $set: updateData })
+    await db.apikeys.update({ _id: objectId }, { $set: updateData })
 
     // 获取更新后的数据
-    const updatedKey = await db.apikeys.findOne({ _id: id })
+    const updatedKey = await db.apikeys.findOne({ _id: objectId })
 
     return {
       success: true,
       message: 'ApiKey 更新成功',
       data: {
-        id: updatedKey._id,
+        id: updatedKey._id.toString(),
         key: updatedKey.key,
         name: updatedKey.name,
         isDefault: updatedKey.isDefault,
