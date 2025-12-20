@@ -23,12 +23,32 @@ export async function parseFormData(event) {
     return { file: null }
   }
 
+  // 确保数据是 Buffer 格式
+  let buffer
+  console.log('[Upload Debug] fileField.data type:', typeof fileField.data)
+  console.log('[Upload Debug] fileField.data constructor:', fileField.data.constructor.name)
+  console.log('[Upload Debug] isBuffer:', Buffer.isBuffer(fileField.data))
+  console.log('[Upload Debug] data length:', fileField.data.length)
+  
+  if (Buffer.isBuffer(fileField.data)) {
+    buffer = fileField.data
+  } else if (fileField.data instanceof Uint8Array) {
+    buffer = Buffer.from(fileField.data)
+  } else if (typeof fileField.data === 'string') {
+    buffer = Buffer.from(fileField.data, 'binary')
+  } else {
+    // 尝试转换为 Buffer
+    buffer = Buffer.from(fileField.data)
+  }
+  
+  console.log('[Upload Debug] final buffer length:', buffer.length)
+
   return {
     file: {
-      buffer: fileField.data,
+      buffer: buffer,
       originalFilename: fileField.filename || 'unknown',
       mimetype: fileField.type,
-      size: fileField.data.length
+      size: buffer.length
     }
   }
 }
