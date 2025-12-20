@@ -6,7 +6,10 @@ const packageJson = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json
 const appVersion = packageJson.version || '1.0.0'
 
 export default defineNuxtConfig({
-  ssr: false, // 关闭服务端渲染，变成纯 SPA
+  ssr: true, // 启用 SSR 
+  nitro: {
+    preset: 'cloudflare-pages'
+  },
 
   future: {
     compatibilityVersion: 4
