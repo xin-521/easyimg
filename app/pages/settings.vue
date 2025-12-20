@@ -382,6 +382,10 @@ async function updateUsername() {
     toastStore.error('请输入新用户名')
     return
   }
+  if (newUsername.value.trim().length < 3) {
+    toastStore.error('用户名长度至少 3 位')
+    return
+  }
 
   savingUsername.value = true
 

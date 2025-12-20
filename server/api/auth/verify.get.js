@@ -24,18 +24,16 @@ export default defineEventHandler(async (event) => {
     }
 
     // 验证用户是否存在
-    let objectId
+    let user
     try {
-      objectId = new ObjectId(decoded.userId)
+      // 尝试使用 ObjectId 查询
+      const objectId = new ObjectId(decoded.userId)
+      user = await db.users.findOne({ _id: objectId })
     } catch (err) {
-      return {
-        success: false,
-        authenticated: false,
-        message: '无效的用户 ID'
-      }
+      // 如果转换 ObjectId 失败，尝试使用字符串查询
+      user = await db.users.findOne({ _id: decoded.userId })
     }
 
-    const user = await db.users.findOne({ _id: objectId })
     if (!user) {
       return {
         success: false,
